@@ -1,0 +1,63 @@
+"""A Perpl market, learned from ContractAdded(V2). Needed to scale prices and sizes."""
+type Market {
+  id: ID! # perpId
+  symbol: String!
+  priceDecimals: Int!
+  lotDecimals: Int!
+}
+
+"""Perpl account id -> wallet address (AccountCreated)."""
+type PerplAccount {
+  id: ID! # accountId
+  address: String!
+}
+
+"""Aggregated performance of one wallet. Drives the leaderboard."""
+type Trader {
+  id: ID! # lowercase wallet address
+  accountId: BigInt!
+  trades: Int! # positions opened or increased
+  wins: Int!
+  losses: Int!
+  grossProfit: Float!
+  grossLoss: Float!
+  realizedPnl: Float! @index
+  peakPnl: Float!
+  deposited: Float!
+  maxDrawdown: Float! # (peak realized PnL - realized PnL) / deposits, 0..1
+  sumLeverage: Float!
+  favMarket: String
+  favCount: Int!
+  lastTradeAt: Int!
+}
+
+"""How often a trader touches each market (to pick their favourite)."""
+type TraderMarket {
+  id: ID! # address-perpId
+  count: Int!
+}
+
+"""The open position we last saw per account+market (closes don't carry size)."""
+type OpenPosition {
+  id: ID! # accountId-perpId
+  side: String!
+  size: Float!
+  leverage: Float!
+}
+
+"""One leader action. The copy engine polls these by trader + timestamp."""
+type Trade {
+  id: ID!
+  trader: String! @index
+  accountId: BigInt!
+  perpId: Int!
+  market: String!
+  side: String! # long | short
+  action: String! # open | close
+  price: Float!
+  size: Float!
+  leverage: Float!
+  pnl: Float!
+  timestamp: Int! @index
+  txHash: String!
+}

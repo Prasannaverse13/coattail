@@ -1,0 +1,12 @@
+node_modules
+.next
+.env*.local
+.env
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+indexer/node_modules
+indexer/generated
+indexer/build
+indexer/.envio
+indexer/envio-env.d.ts
