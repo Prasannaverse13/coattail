@@ -77,7 +77,8 @@ function StatusChip({ r }: { r: CopyRecord }) {
     failed: ["Failed", "var(--coral-soft)", "var(--down)"],
   };
   const [l, bg, c] = map[r.status];
-  return <span className="chip" style={{ background: bg, color: c, fontSize: 10 }}>{l}</span>;
+  const label = r.replay && r.status === "simulated" ? "Practice · replay" : l;
+  return <span className="chip" style={{ background: bg, color: c, fontSize: 10 }}>{label}</span>;
 }
 
 function FeedRow({ r }: { r: CopyRecord }) {
@@ -92,7 +93,7 @@ function FeedRow({ r }: { r: CopyRecord }) {
       </div>
       <div style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 500, lineHeight: 1.35 }}>{r.explain ?? r.reason ?? "…"}</div>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "var(--ink-3)", fontWeight: 600 }}>
-        <span>{ago(r.at)}</span>
+        <span>{ago(r.at)}{r.replay ? " · replay of a real recent trade" : ""}</span>
         {r.txHash && (
           <a href={`${PERPL.explorer}/tx/${r.txHash}`} target="_blank" rel="noreferrer" style={{ color: "var(--ink-2)" }}>
             View on chain ↗

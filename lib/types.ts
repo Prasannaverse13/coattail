@@ -66,6 +66,7 @@ export interface CopyRecord {
   reason?: string; // why skipped / failed
   explain?: string; // Kimi
   txHash?: string;
+  replay?: boolean; // practice only: a real past trade by the leader, replayed so quiet traders still show the flow
   at: number;
 }
 

@@ -426,6 +426,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const equityStart = useRef(0);
   const demoOpen = useRef(new Map<string, LeaderTrade>());
   const running = useRef(false);
+  const replayQueue = useRef<LeaderTrade[]>([]);
 
   const patchRecord = useCallback((id: string, patch: Partial<CopyRecord>) => {
     setFeed((f) => f.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -446,7 +447,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const handleLeaderTrade = useCallback(
-    async (t: LeaderTrade) => {
+    async (t: LeaderTrade, replay = false) => {
       if (!policy) return;
       setLeaderFeed((l) => [t, ...l].slice(0, 30));
       const real = !practice;
@@ -469,6 +470,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         leverage: d.kind === "copy" ? d.leverage : t.leverage,
         status: d.kind === "skip" ? "skipped" : real ? "sent" : "simulated",
         reason: d.kind === "skip" ? d.reason : undefined,
+        replay: replay || undefined,
         at: Date.now(),
       };
       setFeed((f) => [base, ...f]);
@@ -513,6 +515,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const handleRef = useRef(handleLeaderTrade);
   handleRef.current = handleLeaderTrade;
+  const practiceRef = useRef(practice);
+  practiceRef.current = practice;
 
   const startAutopilot = useCallback(async () => {
     if (!policy || !selected) return;
@@ -527,6 +531,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         const recent = await fetchRecentTrades(selected.address, 8).catch(() => []);
         setLeaderFeed(recent);
+      } else if (selected.source === "envio") {
+        // Practice on a real leader: real traders can go quiet for hours, so replay their latest real trades
+        // (oldest first, labeled as replays) while still picking up anything new live.
+        const recent = await fetchRecentTrades(selected.address, 8).catch(() => []);
+        replayQueue.current = [...recent].reverse();
+        mirrored.current.clear();
       }
       equityStart.current = practice ? PRACTICE_BALANCE : (perplAccount?.balance ?? 0);
       lastSeen.current = Math.floor(Date.now() / 1000);
@@ -561,6 +571,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           for (const t of trades) {
             lastSeen.current = Math.max(lastSeen.current, Math.floor(t.at / 1000));
             await handleRef.current(t);
+          }
+          if (!trades.length && practiceRef.current && replayQueue.current.length) {
+            await handleRef.current(replayQueue.current.shift()!, true);
           }
         } else if (Math.random() < 0.45) {
           const dt = demoTradeFor(selected, demoOpen.current);
