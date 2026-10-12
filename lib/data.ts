@@ -27,6 +27,17 @@ export function vibeFor(avgLev: number, winRate: number): Vibe {
 
 export const nameFor = (address: string) => NAMES[hash(address) % NAMES.length];
 
+/** Hash collisions can give two traders the same name; walk to the next unused one so the list reads cleanly. */
+function uniqueNames<T extends { address: string; name: string }>(list: T[]): T[] {
+  const used = new Set<string>();
+  return list.map((t) => {
+    let i = NAMES.indexOf(t.name);
+    for (let n = 0; n < NAMES.length && used.has(NAMES[i]); n++) i = (i + 1) % NAMES.length;
+    used.add(NAMES[i]);
+    return { ...t, name: NAMES[i] };
+  });
+}
+
 /* ------------------------------------------------------------------ demo data (always labeled) */
 
 const demoRaw: Array<[string, number, Partial<Trader["stats"]>]> = [
@@ -36,11 +47,13 @@ const demoRaw: Array<[string, number, Partial<Trader["stats"]>]> = [
   ["0xc4e7a0d3f6b9c2e5a8d1f4b7e0c3a6d9f2b5e8c1", 88, { trades: 57, winRate: 0.49, profitFactor: 1.4, maxDrawdown: 0.27, pnl30d: 9340, avgLeverage: 15, favMarket: "MON" }],
 ];
 
-export const DEMO_TRADERS: Trader[] = demoRaw.map(([address, accountId, s]) => {
-  const stats = s as Trader["stats"];
-  const vibe = vibeFor(stats.avgLeverage, stats.winRate);
-  return { address: address as Address, accountId, name: nameFor(address), vibe, ...QUOTES[vibe], stats, source: "demo" };
-});
+export const DEMO_TRADERS: Trader[] = uniqueNames(
+  demoRaw.map(([address, accountId, s]): Trader => {
+    const stats = s as Trader["stats"];
+    const vibe = vibeFor(stats.avgLeverage, stats.winRate);
+    return { address: address as Address, accountId, name: nameFor(address), vibe, ...QUOTES[vibe], stats, source: "demo" };
+  }),
+);
 
 const DEMO_MARKETS = [
   { symbol: "BTC", price: 97_250, perpId: 1 },
@@ -104,7 +117,7 @@ export async function fetchTraders(): Promise<{ traders: Trader[]; live: boolean
           id accountId trades wins losses grossProfit grossLoss realizedPnl maxDrawdown sumLeverage favMarket
         }
       }`);
-    const traders = data.Trader.map((r): Trader => {
+    const traders = uniqueNames(data.Trader.map((r): Trader => {
       const closed = r.wins + r.losses;
       const winRate = closed ? r.wins / closed : 0;
       const avgLeverage = r.trades ? r.sumLeverage / r.trades : 1;
@@ -126,7 +139,7 @@ export async function fetchTraders(): Promise<{ traders: Trader[]; live: boolean
           favMarket: r.favMarket ?? "—",
         },
       };
-    });
+    }));
     return traders.length ? { traders, live: true } : { traders: DEMO_TRADERS, live: false };
   } catch {
     return { traders: DEMO_TRADERS, live: false };
