@@ -241,7 +241,7 @@ function Traders() {
           </div>
           <div style={{ textAlign: "right" }}>
             <div className={`num ${t.stats.pnl30d >= 0 ? "up" : "down"}`} style={{ fontWeight: 800, fontSize: 15 }}>{t.stats.pnl30d >= 0 ? "+" : ""}{usd(t.stats.pnl30d, 0)}</div>
-            <div className="eyebrow" style={{ fontSize: 9 }}>30 days</div>
+            <div className="eyebrow" style={{ fontSize: 9 }}>{t.source === "demo" ? "30 days" : "realized"}</div>
           </div>
         </motion.button>
       ))}

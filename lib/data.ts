@@ -94,17 +94,24 @@ async function gql<T>(query: string, variables: Record<string, unknown> = {}): P
   return json.data as T;
 }
 
+/** Hasura returns decimal columns (Float/BigDecimal) as strings, so every numeric field is coerced before use. */
+type Dec = number | string;
+const num = (v: Dec | null | undefined) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
 interface EnvioTrader {
   id: string;
-  accountId: string;
-  trades: number;
-  wins: number;
-  losses: number;
-  grossProfit: number;
-  grossLoss: number;
-  realizedPnl: number;
-  maxDrawdown: number;
-  sumLeverage: number;
+  accountId: Dec;
+  trades: Dec;
+  wins: Dec;
+  losses: Dec;
+  grossProfit: Dec;
+  grossLoss: Dec;
+  realizedPnl: Dec;
+  maxDrawdown: Dec;
+  sumLeverage: Dec;
   favMarket: string | null;
 }
 
@@ -118,23 +125,27 @@ export async function fetchTraders(): Promise<{ traders: Trader[]; live: boolean
         }
       }`);
     const traders = uniqueNames(data.Trader.map((r): Trader => {
-      const closed = r.wins + r.losses;
-      const winRate = closed ? r.wins / closed : 0;
-      const avgLeverage = r.trades ? r.sumLeverage / r.trades : 1;
+      const wins = num(r.wins);
+      const closed = wins + num(r.losses);
+      const winRate = closed ? wins / closed : 0;
+      const trades = num(r.trades);
+      const avgLeverage = trades ? num(r.sumLeverage) / trades : 1;
+      const grossProfit = num(r.grossProfit);
+      const grossLoss = num(r.grossLoss);
       const vibe = vibeFor(avgLeverage, winRate);
       return {
         address: r.id as Address,
-        accountId: Number(r.accountId),
+        accountId: num(r.accountId),
         name: nameFor(r.id),
         vibe,
         ...QUOTES[vibe],
         source: "envio",
         stats: {
-          trades: r.trades,
+          trades,
           winRate,
-          profitFactor: r.grossLoss > 0 ? r.grossProfit / r.grossLoss : r.grossProfit > 0 ? 9.99 : 0,
-          maxDrawdown: r.maxDrawdown,
-          pnl30d: r.realizedPnl,
+          profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? 9.99 : 0,
+          maxDrawdown: num(r.maxDrawdown),
+          pnl30d: num(r.realizedPnl),
           avgLeverage: +avgLeverage.toFixed(1),
           favMarket: r.favMarket ?? "—",
         },
@@ -149,16 +160,31 @@ export async function fetchTraders(): Promise<{ traders: Trader[]; live: boolean
 interface EnvioTrade {
   id: string;
   trader: string;
-  perpId: number;
+  perpId: Dec;
   market: string;
   side: string;
   action: string;
-  price: number;
-  size: number;
-  leverage: number;
-  timestamp: number;
+  price: Dec;
+  size: Dec;
+  leverage: Dec;
+  timestamp: Dec;
   txHash: string;
 }
+
+const toLeaderTrade = (r: EnvioTrade): LeaderTrade => ({
+  id: r.id,
+  trader: r.trader as Address,
+  perpId: num(r.perpId),
+  market: r.market,
+  side: r.side === "short" ? "short" : "long",
+  action: r.action === "close" ? "close" : "open",
+  price: num(r.price),
+  size: num(r.size),
+  leverage: num(r.leverage),
+  at: num(r.timestamp) * 1000,
+  txHash: r.txHash,
+  source: "envio",
+});
 
 /** New trades by `trader` since `sinceSec` — the copy engine's input stream. */
 export async function fetchTradesSince(trader: Address, sinceSec: number): Promise<LeaderTrade[]> {
@@ -170,20 +196,7 @@ export async function fetchTradesSince(trader: Address, sinceSec: number): Promi
     }`,
     { t: trader.toLowerCase(), s: sinceSec },
   );
-  return data.Trade.map((r) => ({
-    id: r.id,
-    trader: r.trader as Address,
-    perpId: r.perpId,
-    market: r.market,
-    side: r.side === "short" ? "short" : "long",
-    action: r.action === "close" ? "close" : "open",
-    price: r.price,
-    size: r.size,
-    leverage: r.leverage,
-    at: r.timestamp * 1000,
-    txHash: r.txHash,
-    source: "envio",
-  }));
+  return data.Trade.map(toLeaderTrade);
 }
 
 export async function fetchRecentTrades(trader: Address, limit = 12): Promise<LeaderTrade[]> {
@@ -196,18 +209,5 @@ export async function fetchRecentTrades(trader: Address, limit = 12): Promise<Le
     }`,
     { t: trader.toLowerCase(), n: limit },
   ).catch(() => ({ Trade: [] as EnvioTrade[] }));
-  return data.Trade.map((r) => ({
-    id: r.id,
-    trader: r.trader as Address,
-    perpId: r.perpId,
-    market: r.market,
-    side: r.side === "short" ? "short" : "long",
-    action: r.action === "close" ? "close" : "open",
-    price: r.price,
-    size: r.size,
-    leverage: r.leverage,
-    at: r.timestamp * 1000,
-    txHash: r.txHash,
-    source: "envio",
-  }));
+  return data.Trade.map(toLeaderTrade);
 }
