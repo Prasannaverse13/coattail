@@ -50,12 +50,13 @@ export async function POST(req: Request) {
         model: MODEL,
         // No temperature: several Kimi models pin it and reject overrides with a 400.
         max_tokens: 400, // headroom in case the model spends tokens reasoning before the one-line answer
+        thinking: { type: "disabled" }, // one short sentence: skip slow reasoning (supported by kimi-k2.5+)
         messages: [
           { role: "system", content: SYSTEM },
           { role: "user", content: JSON.stringify(b) },
         ],
       }),
-      signal: AbortSignal.timeout(9000),
+      signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) {
       // Public error text from Kimi only (never the key); lets a bad model name or param show up in the response.
@@ -64,8 +65,12 @@ export async function POST(req: Request) {
     }
     const json = await res.json();
     const text = String(json?.choices?.[0]?.message?.content ?? "").trim().replace(/^["']|["']$/g, "");
-    return NextResponse.json({ text: text || fallback(b), source: text ? "kimi" : "template" });
-  } catch {
-    return NextResponse.json({ text: fallback(b), source: "template" });
+    return NextResponse.json({
+      text: text || fallback(b),
+      source: text ? "kimi" : "template",
+      ...(text ? {} : { note: `kimi empty reply (finish_reason ${json?.choices?.[0]?.finish_reason ?? "?"})` }),
+    });
+  } catch (e) {
+    return NextResponse.json({ text: fallback(b), source: "template", note: `kimi request failed: ${e instanceof Error ? e.name : "error"}` });
   }
 }
