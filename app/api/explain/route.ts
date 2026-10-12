@@ -48,8 +48,8 @@ export async function POST(req: Request) {
       headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
       body: JSON.stringify({
         model: MODEL,
-        temperature: 0.4,
-        max_tokens: 80,
+        // No temperature: several Kimi models pin it and reject overrides with a 400.
+        max_tokens: 400, // headroom in case the model spends tokens reasoning before the one-line answer
         messages: [
           { role: "system", content: SYSTEM },
           { role: "user", content: JSON.stringify(b) },
@@ -57,7 +57,11 @@ export async function POST(req: Request) {
       }),
       signal: AbortSignal.timeout(9000),
     });
-    if (!res.ok) return NextResponse.json({ text: fallback(b), source: "template", note: `kimi ${res.status}` });
+    if (!res.ok) {
+      // Public error text from Kimi only (never the key); lets a bad model name or param show up in the response.
+      const detail = (await res.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 240);
+      return NextResponse.json({ text: fallback(b), source: "template", note: `kimi ${res.status} ${detail}`.trim() });
+    }
     const json = await res.json();
     const text = String(json?.choices?.[0]?.message?.content ?? "").trim().replace(/^["']|["']$/g, "");
     return NextResponse.json({ text: text || fallback(b), source: text ? "kimi" : "template" });
