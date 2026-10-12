@@ -305,7 +305,9 @@ function Me() {
   const [confirm, setConfirm] = useState(false);
   const [text, setText] = useState("");
   const max = money === "deposit" ? ausd : (perplAccount?.balance ?? 0);
-  const ok = Number(amount) > 0 && Number(amount) <= max;
+  // Perpl requires a 100 aUSD minimum to open an account (docs: networks-and-configuration).
+  const minFirst = money === "deposit" && !perplAccount ? 100 : 0;
+  const ok = Number(amount) > 0 && Number(amount) >= minFirst && Number(amount) <= max;
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
@@ -371,7 +373,7 @@ function Me() {
             <input className="field-line num" inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} />
             <button className="chip" onClick={() => setAmount(String(Math.floor(max * 100) / 100))}>Max</button>
           </div>
-          <div className="fine" style={{ margin: 0 }}>Available {usd(max)}{money === "deposit" && !perplAccount ? " · first deposit opens your trading account" : ""}</div>
+          <div className="fine" style={{ margin: 0 }}>Available {usd(max)}{money === "deposit" && !perplAccount ? " · first deposit opens your trading account (min $100)" : ""}</div>
           <Button busy={busy === "deposit" || busy === "withdraw"} disabled={!ok} onClick={async () => { const done = money === "deposit" ? await deposit(Number(amount)) : await withdraw(Number(amount)); if (done) { setMoney(null); setAmount(""); } }}>
             Confirm
           </Button>
