@@ -1,4 +1,4 @@
-import { createPublicClient, http, type Address } from "viem";
+import { createPublicClient, fallback, http, type Address } from "viem";
 import { monadTestnet } from "viem/chains";
 
 export const CHAIN = monadTestnet;
@@ -20,7 +20,12 @@ export const PERPL = {
 
 export const ENVIO_URL = process.env.NEXT_PUBLIC_ENVIO_URL ?? "";
 
-export const publicClient = createPublicClient({ chain: CHAIN, transport: http(RPC_URL) });
+const PUBLIC_RPC = "https://testnet-rpc.monad.xyz";
+// Alchemy first, public Monad RPC as backup so a bad/unenabled key never leaves balances stuck at 0.
+export const publicClient = createPublicClient({
+  chain: CHAIN,
+  transport: RPC_URL === PUBLIC_RPC ? http(PUBLIC_RPC) : fallback([http(RPC_URL), http(PUBLIC_RPC)]),
+});
 
 export const short = (a?: string) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "");
 export const usd = (n: number, d = 2) =>

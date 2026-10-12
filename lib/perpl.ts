@@ -52,12 +52,11 @@ export interface PerplAccount {
 }
 
 export async function readPerplAccount(address: Address): Promise<PerplAccount | null> {
-  const acc = await publicClient.readContract({
-    address: PERPL.exchange,
-    abi: exchangeAbi,
-    functionName: "getAccountByAddr",
-    args: [address],
-  });
+  // A wallet that never deposited has no Perpl account; some deployments revert instead of returning id 0.
+  const acc = await publicClient
+    .readContract({ address: PERPL.exchange, abi: exchangeAbi, functionName: "getAccountByAddr", args: [address] })
+    .catch(() => null);
+  if (!acc) return null;
   if (!acc.accountId || acc.accountId === 0n) return null;
   return {
     accountId: acc.accountId,

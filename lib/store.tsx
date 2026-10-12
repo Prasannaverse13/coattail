@@ -177,14 +177,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /* ---------------------------------------------------------------- chain reads */
+  const lastMon = useRef<number | null>(null);
+  const lastAusd = useRef<number | null>(null);
   const refresh = useCallback(async () => {
     if (!address) return;
-    try {
-      const [m, a, acc] = await Promise.all([readMon(address), readWalletAusd(address), readPerplAccount(address)]);
-      setMon(m);
-      setAusd(a);
-      setPerplAccount(acc);
-    } catch {}
+    // Each read is independent: one failing (e.g. no Perpl account yet) must not hide the others.
+    const [m, a, acc] = await Promise.allSettled([readMon(address), readWalletAusd(address), readPerplAccount(address)]);
+    if (m.status === "fulfilled") {
+      if (lastMon.current !== null && m.value > lastMon.current + 1e-9) setToast(`Received ${(m.value - lastMon.current).toFixed(3)} MON.`);
+      lastMon.current = m.value;
+      setMon(m.value);
+    }
+    if (a.status === "fulfilled") {
+      if (lastAusd.current !== null && a.value > lastAusd.current + 1e-9) setToast(`Received $${(a.value - lastAusd.current).toFixed(2)} aUSD.`);
+      lastAusd.current = a.value;
+      setAusd(a.value);
+    }
+    if (acc.status === "fulfilled") setPerplAccount(acc.value);
     try {
       if (!markets.length) setMarkets(await readMarkets());
     } catch {}
@@ -192,9 +201,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!address) return;
+    lastMon.current = null;
+    lastAusd.current = null;
     refresh();
-    const t = setInterval(refresh, 15_000);
-    return () => clearInterval(t);
+    // Poll while visible, and re-read the moment the app comes back (e.g. returning from the faucet).
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 8_000);
+    const onWake = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    window.addEventListener("online", onWake);
+    window.addEventListener("pageshow", onWake);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+      window.removeEventListener("online", onWake);
+      window.removeEventListener("pageshow", onWake);
+    };
   }, [address, refresh]);
 
   useEffect(() => {
